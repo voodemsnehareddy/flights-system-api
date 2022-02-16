@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="getFlights" doc:id="b1d6109e-c8d0-4b8e-ba3d-83ab62ff3ffc">
+		<logger level="INFO" doc:name="Start" doc:id="5a5b052d-53ea-4ebb-b9e3-49f532b480a7" message="#['Initiating the GetFlights method in System API ' ++ now()]"/>
+		<db:select doc:id="47e0fafa-7495-4bbc-8c6c-65534abaf441" config-ref="Database_Config" doc:name="All Flight Details">
+			<db:sql><![CDATA[select * from indigo_flights]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Array to JSON" doc:id="31bff4ab-20a1-4f38-b149-d607e640334f">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	ID: payload01.flight_id,
+	code: payload01.flight_code default "",
+	price: payload01.price default 0,
+	departureDate: payload01.flight_date as String default "",
+	origin: payload01.origin default "",
+	destination: payload01.destination default "",
+	emptySeats: payload01.emptySeats default 0,
+	plane: {
+		"planeType": payload01.plane_type default "",
+		totalSeats: payload01.total_seats default 0
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="End" doc:id="d88ab436-151f-4844-a533-514f4ad2aa73" message="#['Ending the Get Flights method in System API ' ++ now()]"/>
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="a5a84090-7f1b-4209-8dab-53b06ac32305" type="DB:BAD_SQL_SYNTAX, DB:CONNECTIVITY, DB:QUERY_EXECUTION, HTTP:CONNECTIVITY, HTTP:NOT_FOUND, HTTP:RETRY_EXHAUSTED, HTTP:SERVICE_UNAVAILABLE">
+				<set-payload value="#['Backend System Server is down currently. Please try again after some time!']" doc:name="Connectivity, Resource Not Found Error" doc:id="b139ce7e-f047-45fa-84b1-f00440561cc9" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="getFlightByID" doc:id="f476cf9b-4a1c-4a1f-99b5-c110a7d1dfbf" >
+		<logger level="INFO" doc:name="Start" doc:id="5b562d25-7390-4a41-bd54-09d7c9b1c5cc" message="#['Initiating the Get Flight By ID method in System API ' ++ now()]"/>
+		<db:select doc:id="9e69ceb2-4d93-4465-9f65-e1df1ebbbd6b" config-ref="Database_Config" doc:name="Flight Details by ID" >
+			<db:sql ><![CDATA[select * from indigo_flights WHERE flight_id = :ID]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{'ID' : attributes.uriParams.flightId}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Array to JSON" doc:id="5b4d6c83-3f16-40cb-a454-7cc54ae3ce92" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	ID: payload01.flight_id,
+	code: payload01.flight_code default "",
+	price: payload01.price default 0,
+	departureDate: payload01.flight_date as String default "",
+	origin: payload01.origin default "",
+	destination: payload01.destination default "",
+	emptySeats: payload01.emptySeats default 0,
+	plane: {
+		"planeType": payload01.plane_type default "",
+		totalSeats: payload01.total_seats default 0
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="End" doc:id="f548473b-c389-4acd-ab47-cc1801ada60d" message="#['Ending the Get Flight by ID in System API ' ++ now()]"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="736d8c3f-ba34-4dc8-a9fd-73df0891eef3" type="HTTP:CONNECTIVITY, HTTP:NOT_FOUND, HTTP:RETRY_EXHAUSTED, HTTP:SERVICE_UNAVAILABLE" >
+				<set-payload value="#['Backend System Server is down currently. Please try again after some time!']" doc:name="Connectivity, Resource Not Found Error" doc:id="e92d9480-1ed6-41c7-95ae-9fce3976b7f6" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="bookFlight" doc:id="b34a2182-22ba-45d2-bbd4-da506de98329" >
+		<logger level="INFO" doc:name="Start" doc:id="8701f0b0-15a2-442d-8bae-96ecac181390" message="#['Initiating the Book Flight in System API ' ++ now()]"/>
+		<db:insert doc:id="f258aa63-7122-4eb8-9e0a-645d71983111" config-ref="Database_Config" doc:name="Flight Booking Details" >
+			<db:sql ><![CDATA[insert into indigo_flights (flight_code, price, flight_date, origin, destination, emptySeats, plane_type, total_seats) values (:code, :price, :date, :origin, :destination, :emptySeats, :planeType,
+:totalSeats);]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	'code': payload.code,
+	'price': payload.price,
+	'date': payload.date,
+	'origin': payload.origin,
+	'destination': payload.destination,
+	'emptySeats': payload.emptySeats,
+	'planeType': payload.planeType,
+	'totalSeats': payload.totalSeats
+}]]]></db:input-parameters>
+		</db:insert>
+		<set-payload value='{"message": "Flight Booked Successfully"}' doc:name="Success Message" doc:id="91f6ff29-6591-44f2-b4bb-b237175abb4a" />
+		<logger level="INFO" doc:name="End" doc:id="54d2924f-2933-4196-86a6-e4ed686fece9" message="#['Ending the Book Flight in System API ' ++ now()]"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="3a5ab9cc-18de-4aa4-8e75-d933c268bdc4" type="HTTP:CONNECTIVITY, HTTP:NOT_FOUND, HTTP:RETRY_EXHAUSTED, HTTP:SERVICE_UNAVAILABLE" >
+				<set-payload value="#['Backend System Server is down currently. Please try again after some time!']" doc:name="Connectivity, Resource Not Found Error" doc:id="38c63514-72f2-4dea-babe-3f9d57b673da" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
